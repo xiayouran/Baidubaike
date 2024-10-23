@@ -14,7 +14,7 @@ dependencies = [
 setup(
     name='baidubaike',
     packages=['baidubaike'],
-    version='1.0.0',
+    version='1.1.0',
     description='A wrapper of Baidu Baike',
     author='liyanpeng',
     author_email='yanpeng.li@cumt.edu.cn',
