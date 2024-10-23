@@ -7,10 +7,18 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from collections import OrderedDict
+from typing import Union
 
-from .error import DisambiguationError, PageError, VerifyError
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.wait import WebDriverWait
 
-__all__ = ['WordSearch']
+from baidubaike.utils.error import DisambiguationError, PageError, VerifyError
+from baidubaike.utils.proxy import get_random_proxy
+
+__all__ = ['WordSearch', 'SearchbySelenium']
 
 CLASS_DISAMBIGUATION = ['nslog:519']
 CLASS_CREATOR = ['nslog:1022']
@@ -115,7 +123,6 @@ class Page(object):
 
 
 class Search(object):
-
     def __init__(self, word, results_n=10, page_n=1):
         # Generate searching URL
         url = 'http://baike.baidu.com/search'
@@ -210,3 +217,106 @@ class WordSearch(object):
         text = re.sub(self.pattren, '', text)
 
         return text
+
+
+class SearchbySelenium(object):
+    def __init__(self):
+        self.options = webdriver.ChromeOptions()
+        self.options.add_argument('--headless')
+        self.options.add_argument('user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                                  '(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"')
+        self.options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        self.options.add_experimental_option('useAutomationExtension', False)
+        self.options.add_argument('--proxy-server={}'.format(get_random_proxy()))
+
+        self.browser = webdriver.Chrome(options=self.options)
+        self.browser.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        })
+
+        self.pattren = re.compile(r'\s*\[\d+]')
+
+    def close(self):
+        self.browser.close()
+
+    def get_search_page_source(self, word: str):
+        self.browser.get('https://baike.baidu.com/search')
+        input = self.browser.find_element(By.CLASS_NAME, 'searchInput')
+        input.send_keys(word)
+        input.send_keys(Keys.ENTER)
+        wait = WebDriverWait(self.browser, 10)
+        try:
+            wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'total_FTcZY')))
+        except Exception as err:
+            pass
+
+        return self.browser.page_source
+
+    def get_word_page_source(self, url: str):
+        self.browser.get(url)
+        wait = WebDriverWait(self.browser, 10)
+        try:
+            wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'lemmaSummary__tEeY J-summary')))
+        except Exception as err:
+            pass
+
+        return self.browser.page_source
+
+    def parse_page_source(self, page_source) -> Union[str, list]:
+        soup = BeautifulSoup(page_source, 'lxml')
+        summary_tag = soup.find(class_='lemmaSummary__tEeY J-summary')
+        if summary_tag:
+            text = summary_tag.get_text()
+            text = re.sub(self.pattren, '', text)
+
+            synonym_tag = soup.find(class_='tipPanel_XhtKI')
+            if synonym_tag:
+                synonym_text = synonym_tag.get_text().replace('同义词', '同义词：')
+                text = synonym_text + '\n' + text
+            return text
+        else:
+            tag_list = soup.find_all('a', class_='title_UaTRY')
+            url_list = []
+            for tag in tag_list:
+                url_list.append({
+                    'title': tag.get_text().replace(' - 百度百科', ''),
+                    'url': tag['href'] if 'http' in tag['href'] else 'https://baike.baidu.com' + tag['href']
+                })
+            return url_list
+
+    def check_status(self):
+        try:
+            handle = self.browser.current_window_handle
+            return True
+        except Exception as err:
+            return False
+
+    def get_summary(self, word: str) -> list:
+        if not self.check_status():
+            self.browser = webdriver.Chrome(options=self.options)
+            self.browser.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+                "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            })
+
+        data_list = []
+        try:
+            page_source = self.get_search_page_source(word)
+            result = self.parse_page_source(page_source)
+            if isinstance(result, list):
+                for url_info in result:
+                    title, url = url_info['title'], url_info['url']
+                    page_source = self.get_word_page_source(url)
+                    result = self.parse_page_source(page_source)
+                    data_list.append({
+                        'title': title,
+                        'content': result
+                    })
+            else:
+                data_list.append({
+                    'title': word,
+                    'content': result
+                })
+        finally:
+            self.close()
+
+        return data_list

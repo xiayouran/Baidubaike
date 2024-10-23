@@ -6,6 +6,7 @@
 from distutils.core import setup
 
 dependencies = [
+    "selenium",
     "beautifulsoup4",
     "requests"
 ]
