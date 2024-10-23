@@ -7,7 +7,7 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from collections import OrderedDict
-from typing import Union
+from typing import Union, Tuple
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -221,13 +221,14 @@ class WordSearch(object):
 
 class SearchbySelenium(object):
     def __init__(self):
+        self.valid_ip = get_random_proxy()
         self.options = webdriver.ChromeOptions()
         self.options.add_argument('--headless')
         self.options.add_argument('user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
                                   '(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"')
         self.options.add_experimental_option("excludeSwitches", ["enable-automation"])
         self.options.add_experimental_option('useAutomationExtension', False)
-        self.options.add_argument('--proxy-server={}'.format(get_random_proxy()))
+        self.options.add_argument('--proxy-server={}'.format(self.valid_ip))
 
         self.browser = webdriver.Chrome(options=self.options)
         self.browser.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
@@ -241,6 +242,8 @@ class SearchbySelenium(object):
 
     def get_search_page_source(self, word: str):
         self.browser.get('https://baike.baidu.com/search')
+        wait = WebDriverWait(self.browser, 10)
+        wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'searchInput')))
         input = self.browser.find_element(By.CLASS_NAME, 'searchInput')
         input.send_keys(word)
         input.send_keys(Keys.ENTER)
@@ -262,8 +265,10 @@ class SearchbySelenium(object):
 
         return self.browser.page_source
 
-    def parse_page_source(self, page_source) -> Union[str, list]:
+    def parse_page_source(self, page_source) -> Tuple[str, Union[str, list]]:
         soup = BeautifulSoup(page_source, 'lxml')
+        title_tag = soup.find(class_='lemmaTitle_qmNnR J-lemma-title')
+        title = title_tag.get_text() if title_tag else ''
         summary_tag = soup.find(class_='lemmaSummary__tEeY J-summary')
         if summary_tag:
             text = summary_tag.get_text()
@@ -273,7 +278,7 @@ class SearchbySelenium(object):
             if synonym_tag:
                 synonym_text = synonym_tag.get_text().replace('同义词', '同义词：')
                 text = synonym_text + '\n' + text
-            return text
+            return title, text
         else:
             tag_list = soup.find_all('a', class_='title_UaTRY')
             url_list = []
@@ -282,7 +287,7 @@ class SearchbySelenium(object):
                     'title': tag.get_text().replace(' - 百度百科', ''),
                     'url': tag['href'] if 'http' in tag['href'] else 'https://baike.baidu.com' + tag['href']
                 })
-            return url_list
+            return title, url_list
 
     def check_status(self):
         try:
@@ -293,6 +298,7 @@ class SearchbySelenium(object):
 
     def get_summary(self, word: str) -> list:
         if not self.check_status():
+            self.options.add_argument('--proxy-server={}'.format(self.valid_ip))
             self.browser = webdriver.Chrome(options=self.options)
             self.browser.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
                 "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
@@ -301,12 +307,12 @@ class SearchbySelenium(object):
         data_list = []
         try:
             page_source = self.get_search_page_source(word)
-            result = self.parse_page_source(page_source)
+            _, result = self.parse_page_source(page_source)
             if isinstance(result, list):
                 for url_info in result:
                     title, url = url_info['title'], url_info['url']
                     page_source = self.get_word_page_source(url)
-                    result = self.parse_page_source(page_source)
+                    title, result = self.parse_page_source(page_source)
                     data_list.append({
                         'title': title,
                         'content': result
@@ -316,6 +322,9 @@ class SearchbySelenium(object):
                     'title': word,
                     'content': result
                 })
+        except Exception as err:
+            print('Search [{}] error!'.format(word))
+            self.valid_ip = get_random_proxy()
         finally:
             self.close()
 
