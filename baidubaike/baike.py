@@ -222,6 +222,10 @@ class WordSearch(object):
 class SearchbySelenium(object):
     def __init__(self):
         self.valid_ip = get_random_proxy()
+        self.reset()
+        self.pattren = re.compile(r'\s*\[\d+]')
+
+    def reset(self):
         self.options = webdriver.ChromeOptions()
         self.options.add_argument('--headless')
         self.options.add_argument('user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
@@ -234,8 +238,6 @@ class SearchbySelenium(object):
         self.browser.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
             "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         })
-
-        self.pattren = re.compile(r'\s*\[\d+]')
 
     def close(self):
         self.browser.close()
@@ -298,11 +300,7 @@ class SearchbySelenium(object):
 
     def get_summary(self, word: str) -> list:
         if not self.check_status():
-            self.options.add_argument('--proxy-server={}'.format(self.valid_ip))
-            self.browser = webdriver.Chrome(options=self.options)
-            self.browser.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-                "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-            })
+            self.reset()
 
         data_list = []
         try:
