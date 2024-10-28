@@ -25,7 +25,7 @@ print(result)
 
 `获取动态标签：`
 
-[baike](imgs/baike.jpg)
+![baike](imgs/baike.jpg)
 
 # Proxy
 代理池使用详情请参考：[ProxyPool](https://github.com/Python3WebSpider/ProxyPool)
