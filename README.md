@@ -2,6 +2,7 @@
 百度百科API
 
 # Feature
+- [v1.2.0]() 修复动态标签解析问题
 - [v1.1.0]() 支持Selenium+代理池
 - [v1.0.0]() 支持获取词条摘要
 
@@ -17,10 +18,14 @@ pip install -e .
 from baidubaike import WordSearch, SearchbySelenium
 
 # baike = WordSearch()
-baike = SearchbySelenium()
+baike = SearchbySelenium(total_code='XvBOa', title_code='YkQdg')
 result = baike.get_summary('百度百科')
 print(result)
 ```
+
+`获取动态标签：`
+
+[baike](imgs/baike.jpg)
 
 # Proxy
 代理池使用详情请参考：[ProxyPool](https://github.com/Python3WebSpider/ProxyPool)

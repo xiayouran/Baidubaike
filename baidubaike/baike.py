@@ -220,10 +220,16 @@ class WordSearch(object):
 
 
 class SearchbySelenium(object):
-    def __init__(self):
+    def __init__(self, total_code: str, title_code: str):
         self.valid_ip = get_random_proxy()
         self.reset()
         self.pattren = re.compile(r'\s*\[\d+]')
+
+        self.total_code = 'total_' + total_code
+        self.title_code = 'title_' + title_code
+        self.tipPanel_code = 'tipPanel_XhtKI'
+        self.summary_code = 'lemmaSummary__tEeY J-summary'
+        self.lemmaTitle_code = 'lemmaTitle_qmNnR J-lemma-title'
 
     def reset(self):
         self.options = webdriver.ChromeOptions()
@@ -251,7 +257,7 @@ class SearchbySelenium(object):
         input.send_keys(Keys.ENTER)
         wait = WebDriverWait(self.browser, 10)
         try:
-            wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'total_FTcZY')))
+            wait.until(EC.presence_of_element_located((By.CLASS_NAME, self.total_code)))
         except Exception as err:
             pass
 
@@ -261,7 +267,7 @@ class SearchbySelenium(object):
         self.browser.get(url)
         wait = WebDriverWait(self.browser, 10)
         try:
-            wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'lemmaSummary__tEeY J-summary')))
+            wait.until(EC.presence_of_element_located((By.CLASS_NAME, self.summary_code)))
         except Exception as err:
             pass
 
@@ -269,20 +275,20 @@ class SearchbySelenium(object):
 
     def parse_page_source(self, page_source) -> Tuple[str, Union[str, list]]:
         soup = BeautifulSoup(page_source, 'lxml')
-        title_tag = soup.find(class_='lemmaTitle_qmNnR J-lemma-title')
+        title_tag = soup.find(class_=self.lemmaTitle_code)
         title = title_tag.get_text() if title_tag else ''
-        summary_tag = soup.find(class_='lemmaSummary__tEeY J-summary')
+        summary_tag = soup.find(class_=self.summary_code)
         if summary_tag:
             text = summary_tag.get_text()
             text = re.sub(self.pattren, '', text)
 
-            synonym_tag = soup.find(class_='tipPanel_XhtKI')
+            synonym_tag = soup.find(class_=self.tipPanel_code)
             if synonym_tag:
                 synonym_text = synonym_tag.get_text().replace('同义词', '同义词：')
                 text = synonym_text + '\n' + text
             return title, text
         else:
-            tag_list = soup.find_all('a', class_='title_UaTRY')
+            tag_list = soup.find_all('a', class_=self.title_code)
             url_list = []
             for tag in tag_list:
                 url_list.append({
